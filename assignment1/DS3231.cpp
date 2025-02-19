@@ -28,7 +28,7 @@ namespace een1071 {
 
     void DS3231::clearTimeDate() {
         // Clear all time and date registers
-        // TDOD: add days */
+        // TODO: add days */
         const int rtcRegisters[6] = { RTC_SECONDS, RTC_MINS, RTC_HOURS, RTC_DATE, RTC_MONTH, RTC_YEAR };
 
         for (int i = 0; i < 6; i++) {
@@ -42,16 +42,8 @@ namespace een1071 {
         }
     }
 
-    /* TDOD: add day functionality */
-    /* TODO: Ask Derek how values at 0x02 should be stored? like, if is it 10pm, it is stored as 0x70 at 0x02 (0111 0000 and bits 5 and 6 should be set). Should it be stored as 10 in bcd (0x10 at 0x02)?*/
-    void DS3231::setTimeDate() {
-        time_t timestamp = time(&timestamp);
-        struct tm *ltm = localtime(&timestamp);
-
-        unsigned char hourReg = readRegister(RTC_HOURS);
+    unsigned char DS3231::checkIf12HFormat(unsigned char hourReg, int hour) {
         bool is12Hour = hourReg & (1 << HOUR_MODE_BIT);
-
-        int hour = ltm->tm_hour;  // This is in 24h format from ctime
 
         if (is12Hour) {
             // Converting 24-hour to 12-hour format
@@ -71,6 +63,19 @@ namespace een1071 {
         } else {
             hourReg = decToBcd(hour);
         }
+
+        return hourReg;
+    }
+
+    /* TODO: add day functionality */
+    /* TODO: Ask Derek how values at 0x02 should be stored? like, if is it 10pm, it is stored as 0x70 at 0x02 (0111 0000 and bits 5 and 6 should be set). Should it be stored as 10 in bcd (0x10 at 0x02)?*/
+    void DS3231::setTimeDate() {
+        time_t timestamp = time(&timestamp);
+        struct tm *ltm = localtime(&timestamp);
+
+        unsigned char hourReg = readRegister(RTC_HOURS);
+        int hour = ltm->tm_hour;  // This is in 24h format from ctime
+        hourReg = checkIf12HFormat(hourReg, hour);
 
         int timeComponents[6] = { ltm->tm_sec, ltm->tm_min, ltm->tm_hour, ltm->tm_mday, ltm->tm_mon + 1, (ltm->tm_year + 1900) % 100 };
 
@@ -102,6 +107,18 @@ namespace een1071 {
         writeRegister(RTC_HOURS, hourReg);
     }
 
+    int DS3231::readHourValue(unsigned char hourReg) {
+        bool is12Hour = hourReg & (1 << HOUR_MODE_BIT);
+        int hour;
+
+        if (is12Hour) {
+            hour = bcdToDec(hourReg & 0x1F);  // 0x1F mask for 12h mode
+        } else {
+            hour = bcdToDec(hourReg & 0x3F);  // 0x3F mask for 24h mode
+        }
+
+        return hour;
+    }
 
     void DS3231::readTimeDate() {
         int timeDateVal[7];
@@ -112,14 +129,8 @@ namespace een1071 {
         }
 
         cout << "Hour register value: 0x" << hex << (int)dataList[2] << dec << endl;
-
         bool is12Hour = dataList[2] & (1 << HOUR_MODE_BIT);
-        int hour;
-        if (is12Hour) {
-            hour = bcdToDec(dataList[2] & 0x1F);  // 0x1F mask for 12h mode
-        } else {
-            hour = bcdToDec(dataList[2] & 0x3F);  // 0x3F mask for 24h mode
-            }
+        int hour = readHourValue(dataList[2]);
 
         for (int i = 0; i < 7; i++) {
             if (i == 2) {  // Hours

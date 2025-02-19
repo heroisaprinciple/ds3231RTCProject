@@ -42,6 +42,9 @@ namespace een1071 {
         void clearTimeDate();
 
         void setTimeFormat(bool);
+        unsigned char checkIf12HFormat(unsigned char, int);
+        int readHourValue(unsigned char);
+
         void setAMPM(bool isPM);
         void setTimeDate();
 
