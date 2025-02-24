@@ -10,6 +10,7 @@
  #include <math.h>
  #include <stdio.h>
  #include <ctime>
+ #include <string>
 
 using namespace std;
 
@@ -27,11 +28,9 @@ namespace een1071 {
     DS3231 rtc(1, RTC_ADDR);
 
     void DS3231::clearTimeDate() {
-        // Clear all time and date registers
-        // TODO: add days */
-        const int rtcRegisters[6] = { RTC_SECONDS, RTC_MINS, RTC_HOURS, RTC_DATE, RTC_MONTH, RTC_YEAR };
+        const int rtcRegisters[7] = { RTC_SECONDS, RTC_MINS, RTC_DAYS, RTC_HOURS, RTC_DATE, RTC_MONTH, RTC_YEAR };
 
-        for (int i = 0; i < 6; i++) {
+        for (int i = 0; i < 7; i++) {
             cout << "Register 0x" << hex << rtcRegisters[i]
                  << " before clearing: 0x" << (int)readRegister(rtcRegisters[i]) << dec << endl;
 
@@ -67,8 +66,6 @@ namespace een1071 {
         return hourReg;
     }
 
-    /* TODO: add day functionality */
-    /* TODO: Ask Derek how values at 0x02 should be stored? like, if is it 10pm, it is stored as 0x70 at 0x02 (0111 0000 and bits 5 and 6 should be set). Should it be stored as 10 in bcd (0x10 at 0x02)?*/
     void DS3231::setTimeDate() {
         time_t timestamp = time(&timestamp);
         struct tm *ltm = localtime(&timestamp);
@@ -77,19 +74,23 @@ namespace een1071 {
         int hour = ltm->tm_hour;  // This is in 24h format from ctime
         hourReg = checkIf12HFormat(hourReg, hour);
 
-        int timeComponents[6] = { ltm->tm_sec, ltm->tm_min, ltm->tm_hour, ltm->tm_mday, ltm->tm_mon + 1, (ltm->tm_year + 1900) % 100 };
+        int timeComponents[7] = { ltm->tm_sec, ltm->tm_min, ltm->tm_hour, ltm->tm_wday, ltm->tm_mday, ltm->tm_mon + 1, (ltm->tm_year + 1900) % 100 };
 
-        const int rtcRegisters[6] = { RTC_SECONDS, RTC_MINS, RTC_HOURS, RTC_DATE, RTC_MONTH, RTC_YEAR };
+        const int rtcRegisters[7] = { RTC_SECONDS, RTC_MINS, RTC_HOURS, RTC_DAYS, RTC_DATE, RTC_MONTH, RTC_YEAR };
 
-        // Write all components except hours
-        for (int i = 0; i < 6; i++) {
+        // Write all components
+        for (int i = 0; i < 7; i++) {
             if (i == 2) {  // Hours
                 rtc.writeRegister(RTC_HOURS, hourReg);
-            } else {
+            }
+            else if (i == 3) { // Day of weeks
+                rtc.writeRegister(RTC_DAYS, decToBcd(timeComponents[3] + 1));
+            }
+            else {
                 rtc.writeRegister(rtcRegisters[i], decToBcd(timeComponents[i]));
             }
         }
-        }
+    }
 
     void DS3231::setTimeFormat(bool is24Hour) {
         unsigned char hourReg = readRegister(RTC_HOURS);
@@ -176,65 +177,35 @@ namespace een1071 {
     }
 
     /* TODO: add implementation for user to set an alarm time */
-    // todo: ALARMS ARE TRIGGERED RANDOMLY -> when setting hours/minutes, then fine, but setting seconds does not do alarm triggering
-    void DS3231::setAlarmOne(int hours, int minutes, int seconds, bool useDate, bool useDay, int date, int day) {
-        /*
-        // check status of 0x0F:
-        cout << "[DEBUG] Checking alarm status before setting new alarm..." << endl;
-        checkAlarmsStatus();
+    /* TODO: add AM/PM implementation */
+    // This alarm will be triggered when seconds, mins, hours and day (current day of week) are matched! */
+    void DS3231::setAlarmOne() {
+        time_t timestamp = time(&timestamp);
+        struct tm *ltm = localtime(&timestamp);
+        unsigned char statusBefore = readRegister(STATUS_REG);
 
-        // Clear bit 0 on A1F
-        unsigned char status = readRegister(STATUS_REG);
-        writeRegister(STATUS_REG, status & ~0x01);
-
-        unsigned char secReg, minReg, hourReg, dateReg;
-
-        // seconds = seconds % 60;
-        // minutes = minutes % 60;
-        // hours = hours % 24;
-
-
-        //  Alarm when hours, minutes, and seconds match
-        if (!useDate && !useDay) {
-            secReg = decToBcd(seconds) & 0x7F;  // A1M1 = 0
-            minReg = decToBcd(minutes) & 0x7F;  // A1M2 = 0
-            hourReg = decToBcd(hours) & 0x7F;   // A1M3 = 0
-            dateReg = 0x80;                     // A1M4 = 1
-        }
-        else if (useDate) {
-            // Alarm when date, hours, minutes, and seconds match
-            secReg = decToBcd(seconds) & 0x7F;
-            minReg = decToBcd(minutes) & 0x7F;
-            hourReg = decToBcd(hours) & 0x7F;
-            dateReg = decToBcd(date) & 0x3F;       // A1M4 = 0, DY/DT = 0
-        }
-        else if (useDay) {
-            // Alarm when day, hours, minutes, and seconds match
-            secReg = decToBcd(seconds) & 0x7F;
-            minReg = decToBcd(minutes) & 0x7F;
-            hourReg = decToBcd(hours) & 0x7F;
-            dateReg = (decToBcd(day) & 0x3F) | 0x40;  // A1M4 = 0, DY/DT = 1
+        // Add 1 minute to current time
+        int minutes = ltm->tm_min + 1;
+        if(minutes >= 60) {
+            minutes = 0;
+            ltm->tm_hour++;
         }
 
-        // todo: ALARMS ARE TRIGGERED RANDOMLY -> when setting hours/minutes, then fine, but setting seconds does not do alarm triggering??
-        writeRegister(ALARM1_REG_SECONDS, secReg);
-        writeRegister(ALARM1_REG_MINUTES, minReg);
-        writeRegister(ALARM1_REG_HOURS, hourReg);
-        writeRegister(ALARM1_REG_DAY, dateReg);
+        // Clear alarms status before setting new alarm
+        writeRegister(STATUS_REG, statusBefore & ~0x03);
 
-        cout << "Alarm registers (hex):" << endl;
-        cout << "Seconds: 0x" << hex << (int)readRegister(ALARM1_REG_SECONDS) << endl;
-        cout << "Minutes: 0x" << hex << (int)readRegister(ALARM1_REG_MINUTES) << endl;
-        cout << "Hours: 0x" << hex << (int)readRegister(ALARM1_REG_HOURS) << endl;
-        cout << "Day/Date: 0x" << hex << (int)readRegister(ALARM1_REG_DAY) << endl;
-
-        cout << "[DEBUG] Checking alarm status after setting alarm..." << endl;
-        checkAlarmsStatus();
-        */
+        // Set alarm registers
+        writeRegister(ALARM1_REG_SECONDS, decToBcd(ltm->tm_sec) & 0x7F);  // A1M1 = 0
+        writeRegister(ALARM1_REG_MINUTES, decToBcd(minutes) & 0x7F);      // A1M2 = 0
+        writeRegister(ALARM1_REG_HOURS, decToBcd(ltm->tm_hour) & 0x7F);   // A1M3 = 0
+        // Day alarm (RTC starts at 0 == Sunday; bit DYDT is set to 1, but A1M4 is 0 to indicate that we are using date/day field)
+        writeRegister(ALARM1_REG_DAY, 0x40 | decToBcd(ltm->tm_wday + 1));
+        // Enable Alarm 1 interrupt
+        writeRegister(CONTROL_REG, 0x05);  // Set INTCN and A1IE
+        readAlarmOne();
     }
 
     void DS3231::readAlarmOne() {
-        /*
         unsigned char sec = readRegister(ALARM1_REG_SECONDS);
         unsigned char min = readRegister(ALARM1_REG_MINUTES);
         unsigned char hour = readRegister(ALARM1_REG_HOURS);
@@ -243,47 +214,14 @@ namespace een1071 {
         cout << "Alarm 1 is set for: "
              << bcdToDec(hour & 0x7F) << ":"
              << bcdToDec(min & 0x7F) << ":"
-             << bcdToDec(sec & 0x7F);
+             << bcdToDec(sec & 0x7F) << " ";
 
-        if (day & 0x80) {
-            // A1M4 is 1, this is a time-only alarm
-            cout << " (time-only alarm)";
-        } else {
-            // A1M4 is 0, this is a date or day alarm
-            if (day & 0x40) {
-                // DY/DT is 1, this is a day alarm
-                cout << " on day " << bcdToDec(day & 0x3F);
-            } else {
-                // DY/DT is 0, this is a date alarm
-                cout << " on date " << bcdToDec(day & 0x3F);
-            }
-        }
-        cout << endl;
-        */
+        cout << " on day " << getDayOfWeek(bcdToDec(day & 0x3F)) << endl;
     }
 
-    // check alarms statuses on 0x0F
-    void DS3231::checkAlarmsStatus() {
-        /*
-        unsigned char status = readRegister(STATUS_REG);
-        cout << "Status Register before clearing (Hex): 0x" << hex << (int)status << dec << endl;
-           // Clear OSF (bit 7) while preserving other bits
-        writeRegister(STATUS_REG, status & ~0x80);
-        status = readRegister(STATUS_REG);
-        cout << "Status Register after clearing (Hex): 0x" << hex << (int)status << dec << endl;
-
-        bool alarmTriggered = status & 0x01;
-
-        if (alarmTriggered) {
-            cout << "Alarm 1 has been triggered!" << endl;
-        }
-        if (!alarmTriggered) {
-            cout << "No alarms triggered." << endl;
-        }
-
-        // Clear the alarm bits
-        writeRegister(STATUS_REG, status & ~0x03);
-        */
+    std::string DS3231::getDayOfWeek(int day) {
+        const char* dayNames[] = {"", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
+        return dayNames[day];
     }
 }
 

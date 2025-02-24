@@ -6,8 +6,8 @@
 
 #include <iostream>
 #include "DS3231.h"
-#include <unistd.h>
 #include <pthread.h>
+#include <unistd.h>
 
 using namespace std;
 using namespace een1071;
@@ -41,8 +41,24 @@ int main() {
     cout << "\nReading temperature:" << endl;
     rtc.readTemperature();
 
-    // cout << "\nChecking alarm status:" << endl;
-    // rtc.checkAlarmsStatus();
+    cout << "\nTesting alarm 1"<< endl;
+    rtc.setAlarmOne();
+
+    cout << "Waiting for 60 seconds..." << endl;
+    sleep(60);  // Wait for 60 seconds to trigger alarm
+
+    cout << "\nChecking if alarm triggered:" << endl;
+    unsigned char status = rtc.readRegister(STATUS_REG);
+    if(status & 0x01) {
+        cout << "Alarm 1 triggered!" << endl;
+        cout << "Current time: ";
+        rtc.readTimeDate();
+
+        // Clear the alarm flag
+        rtc.writeRegister(STATUS_REG, status & ~0x01);
+    } else {
+        cout << "Alarm did not trigger as expected" << endl;
+    }
 
     return 0;
 }

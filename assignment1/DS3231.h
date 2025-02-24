@@ -8,6 +8,7 @@
 #define DS3231_H_
 
 #include"I2CDevice.h"
+#include <string>
 
 #define RTC_ADDR 0x68
 
@@ -31,6 +32,7 @@
 #define ALARM1_REG_DATE 0x0A
 
 #define STATUS_REG 0x0F
+#define CONTROL_REG 0x0E
 
 namespace een1071 {
     int bcdToDec(unsigned char);
@@ -40,6 +42,7 @@ namespace een1071 {
     public:
         DS3231(unsigned int bus, unsigned int device);
         void clearTimeDate();
+        std::string getDayOfWeek(int day);
 
         void setTimeFormat(bool);
         unsigned char checkIf12HFormat(unsigned char, int);
@@ -52,7 +55,7 @@ namespace een1071 {
         void readTemperature();
         void readTimeDate();
 
-        void setAlarmOne(int, int, int, bool, bool, int, int);
+        void setAlarmOne();
         void readAlarmOne();
         void checkAlarmsStatus();
     };
