@@ -83,7 +83,7 @@ namespace een1071 {
             if (i == 2) {  // Hours
                 rtc.writeRegister(RTC_HOURS, hourReg);
             }
-            else if (i == 3) { // Day of weeks
+            else if (i == 3) { // Day of a week
                 rtc.writeRegister(RTC_DAYS, decToBcd(timeComponents[3] + 1));
             }
             else {
@@ -119,6 +119,11 @@ namespace een1071 {
         }
 
         return hour;
+    }
+
+    std::string DS3231::getDayOfWeek(int day) {
+        const char* dayNames[] = {"", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
+        return dayNames[day];
     }
 
     void DS3231::readTimeDate() {
@@ -160,7 +165,7 @@ namespace een1071 {
     }
 
     void DS3231::readTemperature() {
-        // Reads a whole number from 0x11 (start) and finishes at 0x12 (a fractional part -> we need 2 bytes)
+        // Reads a whole number from 0x11 (start) and finishes at 0x12 (a fractional part -> 2 bytes)
         unsigned char * tempList = rtc.readRegisters(2, RTC_TEMP);
 
         if (!tempList) {
@@ -177,12 +182,13 @@ namespace een1071 {
     }
 
     /* TODO: add implementation for user to set an alarm time */
-    /* TODO: add AM/PM implementation */
     // This alarm will be triggered when seconds, mins, hours and day (current day of week) are matched! */
     void DS3231::setAlarmOne() {
         time_t timestamp = time(&timestamp);
         struct tm *ltm = localtime(&timestamp);
         unsigned char statusBefore = readRegister(STATUS_REG);
+        unsigned char hourReg = readRegister(RTC_HOURS);
+        bool is12Hour = hourReg & (1 << HOUR_MODE_BIT);
 
         // Add 1 minute to current time
         int minutes = ltm->tm_min + 1;
@@ -197,11 +203,18 @@ namespace een1071 {
         // Set alarm registers
         writeRegister(ALARM1_REG_SECONDS, decToBcd(ltm->tm_sec) & 0x7F);  // A1M1 = 0
         writeRegister(ALARM1_REG_MINUTES, decToBcd(minutes) & 0x7F);      // A1M2 = 0
-        writeRegister(ALARM1_REG_HOURS, decToBcd(ltm->tm_hour) & 0x7F);   // A1M3 = 0
-        // Day alarm (RTC starts at 0 == Sunday; bit DYDT is set to 1, but A1M4 is 0 to indicate that we are using date/day field)
+
+        if(is12Hour) {
+            unsigned char alarmHourReg = checkIf12HFormat(hourReg, ltm->tm_hour);
+            writeRegister(ALARM1_REG_HOURS, alarmHourReg & 0x7F);   // A1M3 = 0; bit 6 is 1 and bit 5 is 0/1 depending on am/pm
+        } else {
+            writeRegister(ALARM1_REG_HOURS, decToBcd(ltm->tm_hour) & 0x7F);   // A1M3 = 0
+        }
+
+        // Day alarm (RTC starts at 0 == Sunday; bit DYDT is set to 1, but A1M4 is 0 to indicate usage of date/day field)
         writeRegister(ALARM1_REG_DAY, 0x40 | decToBcd(ltm->tm_wday + 1));
         // Enable Alarm 1 interrupt
-        writeRegister(CONTROL_REG, 0x05);  // Set INTCN and A1IE
+        writeRegister(CONTROL_REG, 0x05);  // Set INTCN and A1|E
         readAlarmOne();
     }
 
@@ -210,18 +223,84 @@ namespace een1071 {
         unsigned char min = readRegister(ALARM1_REG_MINUTES);
         unsigned char hour = readRegister(ALARM1_REG_HOURS);
         unsigned char day = readRegister(ALARM1_REG_DAY);
+        bool is12Hour = hour & (1 << 6); // Checking bit 6 to understand if 12h mode or 24h
 
-        cout << "Alarm 1 is set for: "
-             << bcdToDec(hour & 0x7F) << ":"
-             << bcdToDec(min & 0x7F) << ":"
-             << bcdToDec(sec & 0x7F) << " ";
+        if (is12Hour) {
+            bool isPM = hour & (1 << 5);
+            int hour12 = bcdToDec(hour & 0x1F);
+
+            cout << "Alarm 1 is set for: "
+                 << hour12 << ":"
+                 << bcdToDec(min & 0x7F) << ":"
+                 << bcdToDec(sec & 0x7F) << " "
+                 << (isPM ? "PM" : "AM");
+        } else {
+            cout << "Alarm 1 is set for: "
+                 << bcdToDec(hour & 0x7F) << ":"
+                 << bcdToDec(min & 0x7F) << ":"
+                 << bcdToDec(sec & 0x7F);
+        }
 
         cout << " on day " << getDayOfWeek(bcdToDec(day & 0x3F)) << endl;
     }
 
-    std::string DS3231::getDayOfWeek(int day) {
-        const char* dayNames[] = {"", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
-        return dayNames[day];
+    // This alarm will be triggered when mins, hours and date (today) are matched! */
+    // TODO: add months: Feb = 02 (like on getDayOfWeek) for output to be 'alarm 2 is set on February, 25'
+    void DS3231::setAlarmTwo() {
+        time_t timestamp = time(&timestamp);
+        struct tm *ltm = localtime(&timestamp);
+        unsigned char statusBefore = readRegister(STATUS_REG);
+        unsigned char hourReg = readRegister(RTC_HOURS);
+        bool is12Hour = hourReg & (1 << HOUR_MODE_BIT);
+
+        // Add 1 minute to current time
+        int minutes = ltm->tm_min + 1;
+        if(minutes >= 60) {
+            minutes = 0;
+            ltm->tm_hour++;
+        }
+
+        // Clear alarms status before setting new alarm
+        writeRegister(STATUS_REG, statusBefore & ~0x03);
+
+        // Set alarm registers
+        writeRegister(ALARM2_REG_MINUTES, decToBcd(minutes) & 0x7F); // A2M2 = 0
+
+        if(is12Hour) {
+            unsigned char alarmHourReg = checkIf12HFormat(hourReg, ltm->tm_hour);
+            writeRegister(ALARM2_REG_HOURS, alarmHourReg & 0x7F);   // A2M3 = 0; bit 6 is 1 and bit 5 is 0/1 depending on am/pm
+        } else {
+            writeRegister(ALARM2_REG_HOURS, decToBcd(ltm->tm_hour) & 0x7F);   // A2M3 = 0
+        }
+
+        writeRegister(ALARM2_REG_DAY, decToBcd(ltm->tm_mday) & 0x3F);
+        // Enable Alarm 2 interrupt
+        writeRegister(CONTROL_REG, 0x06);  // Set INTCN and A2|E
+        readAlarmTwo();
     }
+
+    void DS3231::readAlarmTwo() {
+        unsigned char min = readRegister(ALARM2_REG_MINUTES);
+        unsigned char hour = readRegister(ALARM2_REG_HOURS);
+        unsigned char date = readRegister(ALARM2_REG_DATE);
+        bool is12Hour = hour & (1 << 6); // Checking bit 6 to understand if 12h mode or 24h
+
+        if (is12Hour) {
+            bool isPM = hour & (1 << 5);
+            int hour12 = bcdToDec(hour & 0x1F);
+
+            cout << "Alarm 2 is set for: "
+                 << hour12 << ":"
+                 << bcdToDec(min & 0x7F) << ":"
+                 << (isPM ? "PM" : "AM");
+        } else {
+            cout << "Alarm 2 is set for: "
+                 << bcdToDec(hour & 0x7F) << ":"
+                 << bcdToDec(min & 0x7F);
+        }
+
+        cout << " on date " << bcdToDec(date & 0x3F) << endl;
+    }
+
 }
 

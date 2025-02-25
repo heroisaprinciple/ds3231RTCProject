@@ -31,6 +31,11 @@
 #define ALARM1_REG_DAY 0x0A
 #define ALARM1_REG_DATE 0x0A
 
+#define ALARM2_REG_MINUTES 0x0B
+#define ALARM2_REG_HOURS 0x0C
+#define ALARM2_REG_DATE 0x0D
+#define ALARM2_REG_DAY 0x0D
+
 #define STATUS_REG 0x0F
 #define CONTROL_REG 0x0E
 
@@ -57,7 +62,9 @@ namespace een1071 {
 
         void setAlarmOne();
         void readAlarmOne();
-        void checkAlarmsStatus();
+
+        void setAlarmTwo();
+        void readAlarmTwo();
     };
 
 } /* namespace een1071 */
