@@ -39,6 +39,9 @@
 #define STATUS_REG 0x0F
 #define CONTROL_REG 0x0E
 
+#define INT_SQW_PIN 17
+#define LED_PIN 18
+
 namespace een1071 {
     int bcdToDec(unsigned char);
     int decToBcd(int);
@@ -65,6 +68,8 @@ namespace een1071 {
 
         void setAlarmTwo();
         void readAlarmTwo();
+
+        void triggerLED();
     };
 
 } /* namespace een1071 */

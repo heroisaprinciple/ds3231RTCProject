@@ -11,6 +11,7 @@
  #include <stdio.h>
  #include <ctime>
  #include <string>
+ #include <pigpio.h>
 
 using namespace std;
 
@@ -302,5 +303,22 @@ namespace een1071 {
         cout << " on date " << bcdToDec(date & 0x3F) << endl;
     }
 
+    void DS3231::triggerLED() {
+        unsigned char status = readRegister(STATUS_REG);
+        if (status & 0x01) {
+            cout << "Yay, alarm 1 triggered!" << endl;
+            gpioWrite(LED_PIN, 1);
+            gpioDelay(1000000);
+            gpioWrite(LED_PIN, 0);
+        }
+
+        if (status & 0x02) {
+            cout << "Yay, alarm 2 triggered!" << endl;
+            gpioWrite(LED_PIN, 1);
+            gpioDelay(1000000);
+            gpioWrite(LED_PIN, 0);
+        }
+    }
 }
+
 
