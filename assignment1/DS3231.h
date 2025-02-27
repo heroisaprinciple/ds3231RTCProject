@@ -70,6 +70,11 @@ namespace een1071 {
         void readAlarmTwo();
 
         void triggerLED();
+
+        void enableSQW(int);
+        void disableSQW();
+
+        bool sqwStatusCheck(unsigned char, std::string, std::string);
     };
 
 } /* namespace een1071 */

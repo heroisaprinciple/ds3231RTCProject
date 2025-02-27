@@ -13,23 +13,54 @@
 using namespace std;
 using namespace een1071;
 
-// TODO: remove a global ptr
-DS3231 *glbRTC;
-
-// TODO: EACH ALARM IS BEING TRIGGERED TWICE
-
 void interruptCallback(int gpio, int level, uint32_t tick, void * userData) {
-    // DS3231 *rtc = (DS3231*)userData;
-    glbRTC->triggerLED();
+    DS3231 *rtc = (DS3231*)userData;
+    // Trigger LED when interrupts happen
+    rtc->triggerLED();
+}
+
+void blinkLED(DS3231 &rtc) {
+    cout << "\nDemonstrating Square Wave Functionality using PWM:" << endl;
+
+    // pigpio functitons
+    gpioSetMode(LED_PIN, PI_OUTPUT);
+    gpioSetPWMrange(LED_PIN, 100);
+    gpioSetPWMfrequency(LED_PIN, 800);
+
+    // 1Hz - LED flickering with 100% duty cycle
+    cout << "\n1Hz - LED at high brightness" << endl;
+    rtc.enableSQW(1);
+    gpioPWM(LED_PIN, 100);
+    sleep(5);
+
+    // 1.024kHz - LED flickering with 75% duty cycle
+    cout << "\n1.024kHz - LED at medium brightness" << endl;
+    rtc.enableSQW(1024);
+    gpioPWM(LED_PIN, 75);
+    sleep(5);
+
+    // 4.096kHz - LED flickering with 50% duty cycle
+    cout << "\n4.096kHz - LED dimmer" << endl;
+    rtc.enableSQW(4096);
+    gpioPWM(LED_PIN, 50);
+    sleep(5);
+
+    // 8.192kHz - LED flickering with 25% duty cycle
+    cout << "\n8.192kHz - LED very dim" << endl;
+    rtc.enableSQW(8192);
+    gpioPWM(LED_PIN, 25);
+    sleep(5);
+
+    // Turn off PWM
+    gpioPWM(LED_PIN, 0);
+
+    rtc.disableSQW();
 }
 
 int main() {
     DS3231 rtc(1, RTC_ADDR);
     unsigned char status;
     unsigned char control;
-
-    // sending a pointer to rtc to a global var
-    glbRTC = &rtc;
 
     if (gpioInitialise() < 0) {
         perror("Can't initialize pigpio.");
@@ -38,7 +69,8 @@ int main() {
 
     gpioSetMode(INT_SQW_PIN, PI_INPUT);
     gpioSetMode(LED_PIN, PI_OUTPUT);
-    gpioSetAlertFuncEx(INT_SQW_PIN, interruptCallback, NULL);
+    // Enable interrupts, pigpio needs callback
+    gpioSetAlertFuncEx(INT_SQW_PIN, interruptCallback, &rtc);
 
     // Clearing registers first just in case
     cout << "\nClearing all time/date registers:" << endl;
@@ -65,6 +97,15 @@ int main() {
     cout << "\nReading temperature:" << endl;
     rtc.readTemperature();
 
+    // Disable interrupts to enable SQW; otherwise interrupts and SQW will be at conflict
+    gpioSetAlertFuncEx(INT_SQW_PIN, NULL, NULL);
+
+    // LED flickering via SQW and PWM
+    blinkLED(rtc);
+
+    // Return to interrupts!
+    gpioSetAlertFuncEx(INT_SQW_PIN, interruptCallback, &rtc);
+
     // Trigger alarm 1
 
     cout << "\nTesting alarm 1"<< endl;
@@ -82,7 +123,6 @@ int main() {
     cout << "Control Register (Hex): 0x" << hex << (int)control << dec << endl;
 
     if(status & 0x01) {
-        cout << "Alarm 1 triggered!" << endl;
         cout << "Current time: ";
         rtc.readTimeDate();
 
@@ -109,7 +149,6 @@ int main() {
     cout << "Control Register (Hex): 0x" << hex << (int)control << dec << endl;
 
     if(status & 0x02) {
-        cout << "Alarm 2 triggered!" << endl;
         cout << "Current time: ";
         rtc.readTimeDate();
 
@@ -123,4 +162,5 @@ int main() {
 
     return 0;
 }
+
 

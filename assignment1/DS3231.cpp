@@ -10,7 +10,6 @@
  #include <math.h>
  #include <stdio.h>
  #include <ctime>
- #include <string>
  #include <pigpio.h>
 
 using namespace std;
@@ -305,20 +304,100 @@ namespace een1071 {
 
     void DS3231::triggerLED() {
         unsigned char status = readRegister(STATUS_REG);
+
         if (status & 0x01) {
-            cout << "Yay, alarm 1 triggered!" << endl;
+            cout << "Yay, alarm 1 is triggered and LED is on!" << endl;
             gpioWrite(LED_PIN, 1);
             gpioDelay(1000000);
             gpioWrite(LED_PIN, 0);
+
+            // writeRegister(STATUS_REG, status & ~0x01);
         }
 
         if (status & 0x02) {
-            cout << "Yay, alarm 2 triggered!" << endl;
+            cout << "Yay, alarm 2 triggered and LED is on!" << endl;
             gpioWrite(LED_PIN, 1);
             gpioDelay(1000000);
             gpioWrite(LED_PIN, 0);
+
+            // writeRegister(STATUS_REG, status & ~0x02);
         }
     }
+
+    bool DS3231::sqwStatusCheck(unsigned char expectedVal, string success, string failure) {
+        unsigned char endVal = readRegister(CONTROL_REG);
+
+        if (endVal == expectedVal) {
+            cout << success << endl;
+            return true;
+        }
+        else {
+            cout << failure << endl;
+            return false;
+        }
+    }
+
+    void DS3231::enableSQW(int frequency) {
+        unsigned char control = readRegister(CONTROL_REG);
+        cout << "Initial Control Register: 0x" << hex << (int)control << dec << endl;
+        unsigned char endValue;
+
+        if (!control) {
+            perror("Can't read control register.");
+            return;
+        }
+
+        // Clear INTCN bit to enable SQW
+        control &= ~0x04;
+
+        // Clear RS1 and RS2 bits
+        control &= ~0x18;
+
+        switch(frequency) {
+        case 1: // 1 Hz => RS1 = 0; RS2 = 0
+            cout << "Setting 1Hz..." << endl;
+            break;
+        case 1024: // 1024kHz => RS1 = 1; RS2 = 0
+            control |= 0x8;
+            cout << "Setting 1.024 kHz (RS1 = 1, RS2 = 0)" << endl;
+            break;
+        case 4096: // 4096kHz => RS1 = 0; RS2 = 1
+             control |= 0x10;
+             cout << "Setting 4.096 kHz (RS1 = 0, RS2 = 1)" << endl;
+            break;
+        case 8192: // 8192kHz => RS1 = 1; RS2 = 1
+             control |= 0x18;
+             cout << "Setting 8.192 kHz (RS1 = 1, RS2 = 1)" << endl;
+            break;
+        default:
+            cout << "Invalid" << endl;
+            break;
+        }
+
+        writeRegister(CONTROL_REG, control);
+        unsigned char test = readRegister(CONTROL_REG);
+        cout << "Control Register after writing: 0x" << hex << (int)test << dec << endl;
+
+        sqwStatusCheck(control, "SQW enabled at " + to_string(frequency) + " Hz", "SQW is failed...");
+    }
+
+    void DS3231::disableSQW() {
+        unsigned char control = readRegister(CONTROL_REG);
+        unsigned char endValue;
+
+        if (!control) {
+            perror("Can't read control register.");
+            return;
+        }
+
+        // Set INTCN = 1 to disable square wave and enable interrupts
+        control |= 0x4;
+
+        writeRegister(CONTROL_REG, control);
+        sqwStatusCheck(control, "SQW disabled, set to interrupt mode", "SQW is failed...");
+    }
 }
+
+
 
 
