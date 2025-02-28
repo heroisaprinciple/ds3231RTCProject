@@ -122,9 +122,14 @@ namespace een1071 {
         return hour;
     }
 
-    std::string DS3231::getDayOfWeek(int day) {
+    string DS3231::getDayOfWeek(int day) {
         const char* dayNames[] = {"", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
         return dayNames[day];
+    }
+
+    string DS3231::getMonth(int month) {
+        const char* monthNames[] = {"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"};
+        return monthNames[month];
     }
 
     void DS3231::readTimeDate() {
@@ -246,7 +251,6 @@ namespace een1071 {
     }
 
     // This alarm will be triggered when mins, hours and date (today) are matched! */
-    // TODO: add months: Feb = 02 (like on getDayOfWeek) for output to be 'alarm 2 is set on February, 25'
     void DS3231::setAlarmTwo() {
         time_t timestamp = time(&timestamp);
         struct tm *ltm = localtime(&timestamp);
@@ -284,6 +288,8 @@ namespace een1071 {
         unsigned char min = readRegister(ALARM2_REG_MINUTES);
         unsigned char hour = readRegister(ALARM2_REG_HOURS);
         unsigned char date = readRegister(ALARM2_REG_DATE);
+        unsigned char month = readRegister(RTC_MONTH);
+
         bool is12Hour = hour & (1 << 6); // Checking bit 6 to understand if 12h mode or 24h
 
         if (is12Hour) {
@@ -300,7 +306,7 @@ namespace een1071 {
                  << bcdToDec(min & 0x7F);
         }
 
-        cout << " on date " << bcdToDec(date & 0x3F) << endl;
+        cout << " on date " << getMonth(bcdToDec(month & 0x1F)) << ", " << bcdToDec(date & 0x3F) << endl;
     }
 
     void DS3231::triggerLED() {

@@ -50,7 +50,8 @@ namespace een1071 {
     public:
         DS3231(unsigned int bus, unsigned int device);
         void clearTimeDate();
-        std::string getDayOfWeek(int day);
+        std::string getDayOfWeek(int);
+        std::string getMonth(int);
 
         void setTimeFormat(bool);
         unsigned char checkIf12HFormat(unsigned char, int);
