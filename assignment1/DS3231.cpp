@@ -30,8 +30,9 @@ namespace een1071 {
     void DS3231::clearTimeDate() {
         const int rtcRegisters[7] = { RTC_SECONDS, RTC_MINS, RTC_DAYS, RTC_HOURS, RTC_DATE, RTC_MONTH, RTC_YEAR };
 
+
         for (int i = 0; i < 7; i++) {
-            cout << "Register 0x" << hex << rtcRegisters[i]
+           cout << "Register 0x" << hex << rtcRegisters[i]
                  << " before clearing: 0x" << (int)readRegister(rtcRegisters[i]) << dec << endl;
 
             writeRegister(rtcRegisters[i], 0x00);
@@ -339,8 +340,8 @@ namespace een1071 {
 
     void DS3231::enableSQW(int frequency) {
         unsigned char control = readRegister(CONTROL_REG);
+        writeRegister(STATUS_REG, 0x00);  // Clear ALL flags
         cout << "Initial Control Register: 0x" << hex << (int)control << dec << endl;
-        unsigned char endValue;
 
         if (!control) {
             perror("Can't read control register.");
@@ -378,12 +379,12 @@ namespace een1071 {
         unsigned char test = readRegister(CONTROL_REG);
         cout << "Control Register after writing: 0x" << hex << (int)test << dec << endl;
 
-        sqwStatusCheck(control, "SQW enabled at " + to_string(frequency) + " Hz", "SQW is failed...");
+        sqwStatusCheck(control, "SQW enabled at " + to_string(frequency) + " kHz", "SQW is failed...");
     }
 
     void DS3231::disableSQW() {
+        writeRegister(STATUS_REG, 0x00);  // Clear ALL flags
         unsigned char control = readRegister(CONTROL_REG);
-        unsigned char endValue;
 
         if (!control) {
             perror("Can't read control register.");
@@ -397,6 +398,7 @@ namespace een1071 {
         sqwStatusCheck(control, "SQW disabled, set to interrupt mode", "SQW is failed...");
     }
 }
+
 
 
 

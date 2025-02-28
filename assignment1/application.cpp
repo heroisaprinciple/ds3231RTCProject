@@ -69,8 +69,12 @@ int main() {
 
     gpioSetMode(INT_SQW_PIN, PI_INPUT);
     gpioSetMode(LED_PIN, PI_OUTPUT);
-    // Enable interrupts, pigpio needs callback
-    gpioSetAlertFuncEx(INT_SQW_PIN, interruptCallback, &rtc);
+
+    status = rtc.readRegister(STATUS_REG);
+    cout << "Status Register before clearing: 0x" << hex << (int)status << dec << endl;
+    rtc.writeRegister(STATUS_REG, 0x00);
+    status = rtc.readRegister(STATUS_REG);
+    cout << "Status Register after clearing: 0x" << hex << (int)status << dec << endl;
 
     // Clearing registers first just in case
     cout << "\nClearing all time/date registers:" << endl;
@@ -97,19 +101,13 @@ int main() {
     cout << "\nReading temperature:" << endl;
     rtc.readTemperature();
 
-    // Disable interrupts to enable SQW; otherwise interrupts and SQW will be at conflict
-    gpioSetAlertFuncEx(INT_SQW_PIN, NULL, NULL);
-
-    // LED flickering via SQW and PWM
-    blinkLED(rtc);
-
-    // Return to interrupts!
-    gpioSetAlertFuncEx(INT_SQW_PIN, interruptCallback, &rtc);
-
     // Trigger alarm 1
-
     cout << "\nTesting alarm 1"<< endl;
+    rtc.writeRegister(STATUS_REG, 0x00);
+
     rtc.setAlarmOne();
+    // pigpio needs a callback for interrupts
+    gpioSetAlertFuncEx(INT_SQW_PIN, interruptCallback, &rtc);
 
     cout << "Waiting for 60 seconds..." << endl;
     sleep(60);  // Wait for 60 seconds to trigger alarm
@@ -135,6 +133,8 @@ int main() {
     // Trigger alarm 2
 
     cout << "\nTesting alarm 2"<< endl;
+    // clearing both alarms just in case
+    rtc.writeRegister(STATUS_REG, status & ~0x03);
     rtc.setAlarmTwo();
 
     cout << "Waiting for another 60 seconds..." << endl;
@@ -158,6 +158,21 @@ int main() {
         cout << "Alarm 2 did not trigger as expected" << endl;
     }
 
+     // Disable interrupt handler before switching to square wave
+    cout << "Disabling interrupt handler..." << endl;
+    // No interrupt callbacks here, setting sqw
+    gpioSetAlertFuncEx(INT_SQW_PIN, NULL, NULL);
+
+    // Clear status register
+    status = rtc.readRegister(STATUS_REG);
+    rtc.writeRegister(STATUS_REG, 0x00);
+
+    // Testing SQW and PWM
+    blinkLED(rtc);
+
+    cout << "\nProgram complete." << endl;
+
+    // Terminate GPIO and pigpio usage
     gpioTerminate();
 
     return 0;
