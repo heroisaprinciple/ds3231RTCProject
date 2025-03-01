@@ -159,8 +159,8 @@ namespace een1071 {
             }
         }
 
-        printf("The current time is: %02d:%02d:%02d %02d/%02d/%02d",
-               timeDateVal[2], timeDateVal[1], timeDateVal[0],
+        printf("The current time is: %02d:%02d:%02d %s %02d/%02d/%02d",
+               timeDateVal[2], timeDateVal[1], timeDateVal[0], getDayOfWeek(timeDateVal[3]).c_str(),
                timeDateVal[4], timeDateVal[5], timeDateVal[6]);
 
         if (is12Hour) {
