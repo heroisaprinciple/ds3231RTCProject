@@ -306,7 +306,7 @@ namespace een1071 {
                  << bcdToDec(min & 0x7F);
         }
 
-        cout << " on date " << getMonth(bcdToDec(month & 0x1F)) << ", " << bcdToDec(date & 0x3F) << endl;
+        cout << " on date " << getMonth(bcdToDec(month & 0x1F) -1) << ", " << bcdToDec(date & 0x3F) << endl;
     }
 
     void DS3231::triggerLED() {
